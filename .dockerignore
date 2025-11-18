@@ -1,14 +1,11 @@
 .git
 .github
-node_modules
 tmp
 log
 *.log
 .env.local
 .DS_Store
 coverage
-test
-spec
 *.md
 !README.md
 .gitignore
