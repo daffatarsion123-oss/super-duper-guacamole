@@ -1,0 +1,266 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: leihs-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - legacy
+      - admin
+      - borrow
+      - my
+      - procure
+      - inventory
+    networks:
+      - leihs-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: leihs-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    networks:
+      - leihs-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  database:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-database
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      RAILS_ENV: ${RAILS_ENV}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+    volumes:
+      - ./database:/leihs/database
+    working_dir: /leihs/database
+    command: bash -c "bundle exec rake db:create db:migrate db:seed && chmod +x db/init_system_records.sh && ./db/init_system_records.sh && tail -f /dev/null"
+    networks:
+      - leihs-network
+
+  legacy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-legacy
+    depends_on:
+      - database
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      RAILS_ENV: ${RAILS_ENV}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      LEIHS_LEGACY_HTTP_PORT: ${LEIHS_LEGACY_HTTP_PORT}
+    ports:
+      - "${LEIHS_LEGACY_HTTP_PORT}:${LEIHS_LEGACY_HTTP_PORT}"
+    volumes:
+      - ./legacy:/leihs/legacy
+    working_dir: /leihs/legacy
+    command: bash -c "bundle exec rails server -p ${LEIHS_LEGACY_HTTP_PORT} -b 0.0.0.0 || tail -f /dev/null"
+    networks:
+      - leihs-network
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-admin
+    depends_on:
+      - database
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LEIHS_ADMIN_HTTP_PORT: ${LEIHS_ADMIN_HTTP_PORT}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      HTTP_HOST: 0.0.0.0
+    ports:
+      - "${LEIHS_ADMIN_HTTP_PORT}:${LEIHS_ADMIN_HTTP_PORT}"
+    working_dir: /leihs/admin
+    command: >
+      bash -c "if [ -f target/leihs-admin.jar ]; then 
+        java -jar target/leihs-admin.jar run; 
+      else 
+        echo 'Admin JAR not found, keeping container alive' && tail -f /dev/null; 
+      fi"
+    networks:
+      - leihs-network
+
+  borrow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-borrow
+    depends_on:
+      - database
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LEIHS_BORROW_HTTP_PORT: ${LEIHS_BORROW_HTTP_PORT}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      HTTP_HOST: 0.0.0.0
+    ports:
+      - "${LEIHS_BORROW_HTTP_PORT}:${LEIHS_BORROW_HTTP_PORT}"
+    working_dir: /leihs/borrow
+    command: >
+      bash -c "if [ -f target/leihs-borrow.jar ]; then 
+        java -jar target/leihs-borrow.jar run; 
+      else 
+        echo 'Borrow JAR not found, keeping container alive' && tail -f /dev/null; 
+      fi"
+    networks:
+      - leihs-network
+
+  inventory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-inventory
+    depends_on:
+      - database
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LEIHS_INVENTORY_HTTP_PORT: ${LEIHS_INVENTORY_HTTP_PORT}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      HTTP_HOST: 0.0.0.0
+    ports:
+      - "${LEIHS_INVENTORY_HTTP_PORT}:${LEIHS_INVENTORY_HTTP_PORT}"
+    working_dir: /leihs/inventory
+    command: >
+      bash -c "if [ -f target/leihs-inventory.jar ]; then 
+        java -jar target/leihs-inventory.jar run; 
+      else 
+        echo 'Inventory JAR not found, keeping container alive' && tail -f /dev/null; 
+      fi"
+    networks:
+      - leihs-network
+
+  my:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-my
+    depends_on:
+      - database
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LEIHS_MY_HTTP_PORT: ${LEIHS_MY_HTTP_PORT}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      HTTP_HOST: 0.0.0.0
+    ports:
+      - "${LEIHS_MY_HTTP_PORT}:${LEIHS_MY_HTTP_PORT}"
+    working_dir: /leihs/my
+    command: >
+      bash -c "if [ -f target/leihs-my.jar ]; then 
+        java -jar target/leihs-my.jar run; 
+      else 
+        echo 'My JAR not found, keeping container alive' && tail -f /dev/null; 
+      fi"
+    networks:
+      - leihs-network
+
+  procure:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-procure
+    depends_on:
+      - database
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LEIHS_PROCURE_HTTP_PORT: ${LEIHS_PROCURE_HTTP_PORT}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      HTTP_HOST: 0.0.0.0
+    ports:
+      - "${LEIHS_PROCURE_HTTP_PORT}:${LEIHS_PROCURE_HTTP_PORT}"
+    working_dir: /leihs/procure/server
+    command: >
+      bash -c "if [ -f target/leihs-procure.jar ]; then 
+        java -jar target/leihs-procure.jar run; 
+      else 
+        echo 'Procure JAR not found, keeping container alive' && tail -f /dev/null; 
+      fi"
+    networks:
+      - leihs-network
+
+  mail:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leihs-mail
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    working_dir: /leihs/mail
+    command: >
+      bash -c "if [ -f target/leihs-mail.jar ]; then 
+        java -jar target/leihs-mail.jar run; 
+      else 
+        echo 'Mail JAR not found, keeping container alive' && tail -f /dev/null; 
+      fi"
+    networks:
+      - leihs-network
+
+networks:
+  leihs-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

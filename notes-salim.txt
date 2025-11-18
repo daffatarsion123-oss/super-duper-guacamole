@@ -1,0 +1,21 @@
+dropdb -U postgres -p 5436 leihs_dev || true
+createdb -U postgres -p 5436 leihs_dev
+
+psql -U postgres -p 5436 -d leihs_dev -f db/structure.sql
+# psql -U postgres -p 5436 -d leihs_dev -f db/personas.sql
+# psql -U postgres -p 5436 -d leihs_dev -f db/seeds.sql
+# psql -U postgres -p 5436 -d leihs_dev -f db/demo.sql
+
+
+------
+
+pg_restore -p 5436 --single-transaction --no-owner --no-privileges --disable-triggers -d leihs_dev db/demo.pgbin
+
+
+------
+
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=leihs
+export DB_USER=postgres
+export DB_PASSWORD=postgres
