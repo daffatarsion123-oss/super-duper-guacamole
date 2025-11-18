@@ -57,7 +57,7 @@ services:
     volumes:
       - ./database:/leihs/database
     working_dir: /leihs/database
-    command: bash -c "bundle exec rake db:create db:migrate db:seed && chmod +x db/init_system_records.sh && ./db/init_system_records.sh && tail -f /dev/null"
+    command: bash -c "bundle exec rake db:create db:migrate db:seed && ([ -f db/init_system_records.sh ] && chmod +x db/init_system_records.sh && ./db/init_system_records.sh || echo 'init_system_records.sh not found, skipping') && tail -f /dev/null"
     networks:
       - leihs-network
 
